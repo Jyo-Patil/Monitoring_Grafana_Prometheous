@@ -35,7 +35,7 @@ jobs:
     - name: Terraform Apply Infrastructure
       if: github.ref == 'refs/heads/main'
       working-directory: terraform
-      run: terraform destry -auto-approve
+      run: terraform destroy -auto-approve
 
     - name: Login to private Amazon ECR
       run: |
