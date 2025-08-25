@@ -76,19 +76,42 @@ resource "aws_cloudwatch_log_group" "error_logs" {
   retention_in_days = 30
 }
 
-# Deploy Prometheus Stack via Terraform
+# Deploy Prometheus Stack via Terraform - Simplified version
 resource "helm_release" "prometheus" {
   name       = "prometheus"
   repository = "https://prometheus-community.github.io/helm-charts"
-  chart      = "kube-prometheus-stack"
+  chart      = "prometheus"
   namespace  = "monitoring"
   create_namespace = true
-  timeout    = 600
+  timeout    = 300
   wait       = true
-  wait_for_jobs = true
 
   values = [
-    file("${path.module}/../monitoring/helm-values/prometheus-values.yaml")
+    <<-EOT
+      # Simple Prometheus configuration
+      server:
+        persistentVolume:
+          enabled: false
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+      
+      alertmanager:
+        enabled: false
+      
+      pushgateway:
+        enabled: false
+      
+      kube-state-metrics:
+        enabled: false
+      
+      node-exporter:
+        enabled: false
+    EOT
   ]
 
   depends_on = [null_resource.wait_for_eks]
@@ -101,7 +124,7 @@ resource "helm_release" "cloudwatch_agent" {
   chart      = "prometheus-node-exporter"
   namespace  = "amazon-cloudwatch"
   create_namespace = true
-  timeout    = 600
+  timeout    = 300
   wait       = true
 
   values = [
@@ -111,18 +134,18 @@ resource "helm_release" "cloudwatch_agent" {
   depends_on = [null_resource.wait_for_eks]
 }
 
-# Deploy your application via Terraform
-resource "helm_release" "zomato_clone" {
-  name       = "zomato-clone"
-  chart      = "${path.module}/../helm/zomato-clone"
-  namespace  = "default"
-  create_namespace = true
-  timeout    = 600
-  wait       = true
-
-  values = [
-    file("${path.module}/../monitoring/helm-values/app-values.yaml")
-  ]
-
-  depends_on = [null_resource.wait_for_eks]
-}
+# Deploy your application via Terraform - commented out until image is available
+# resource "helm_release" "zomato_clone" {
+#   name       = "zomato-clone"
+#   chart      = "${path.module}/../helm/zomato-clone"
+#   namespace  = "default"
+#   create_namespace = true
+#   timeout    = 300
+#   wait       = true
+#
+#   values = [
+#     file("${path.module}/../monitoring/helm-values/app-values.yaml")
+#   ]
+#
+#   depends_on = [null_resource.wait_for_eks]
+# }

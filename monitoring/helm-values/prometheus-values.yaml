@@ -5,11 +5,9 @@ grafana:
   enabled: true
   adminPassword: "admin123"
   
-  # Persistence
+  # Persistence - disabled temporarily to avoid storage class issues
   persistence:
-    enabled: true
-    size: 10Gi
-    storageClassName: gp2
+    enabled: false
   
   # Dashboard provisioning
   dashboardProviders:
@@ -81,14 +79,15 @@ grafana:
 prometheus:
   prometheusSpec:
     retention: 30d
-    storageSpec:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: gp2
-          accessModes: ["ReadWriteOnce"]
-          resources:
-            requests:
-              storage: 50Gi
+    # Storage - disabled temporarily to avoid storage class issues
+    # storageSpec:
+    #   volumeClaimTemplate:
+    #     spec:
+    #       storageClassName: gp2
+    #       accessModes: ["ReadWriteOnce"]
+    #       resources:
+    #         requests:
+    #           storage: 50Gi
     
     # Service monitors
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -102,14 +101,15 @@ prometheus:
 
 alertmanager:
   alertmanagerSpec:
-    storage:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: gp2
-          accessModes: ["ReadWriteOnce"]
-          resources:
-            requests:
-              storage: 10Gi
+    # Storage - disabled temporarily to avoid storage class issues
+    # storage:
+    #   volumeClaimTemplate:
+    #     spec:
+    #       storageClassName: gp2
+    #       accessModes: ["ReadWriteOnce"]
+    #       resources:
+    #         requests:
+    #           storage: 10Gi
     
     # Alerting rules
     config:
@@ -131,7 +131,7 @@ kubeStateMetrics:
   enabled: true
 
 nodeExporter:
-  enabled: true
+  enabled: false  # Disabled to avoid conflicts with our separate node exporter
 
 # RBAC
 rbac:
