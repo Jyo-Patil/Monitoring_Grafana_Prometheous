@@ -1,0 +1,8 @@
+image:
+  repository: 929897439921.dkr.ecr.us-east-1.amazonaws.com/zomato-clone
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: LoadBalancer
+  port: 80

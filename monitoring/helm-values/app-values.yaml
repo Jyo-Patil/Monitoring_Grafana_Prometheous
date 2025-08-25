@@ -1,0 +1,51 @@
+# Application Values for Zomato Clone
+# This integrates with the monitoring stack
+
+replicaCount: 3
+
+image:
+  repository: "929897439921.dkr.ecr.us-east-1.amazonaws.com/zomato-clone"
+  tag: "latest"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+monitoring:
+  enabled: true
+  prometheus:
+    scrape: true
+    port: 3000
+    path: /metrics
+
+# Service configuration
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 3000
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+# Environment variables
+env:
+  - name: NODE_ENV
+    value: "production"
+  - name: PROMETHEUS_PORT
+    value: "3000"

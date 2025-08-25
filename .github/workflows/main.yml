@@ -1,0 +1,136 @@
+name: CI-CD Build & Deploy with ArgoCD and Monitoring
+
+on:
+  push:
+    branches: [test]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: latest
+
+    - name: Terraform Init
+      working-directory: terraform
+      run: terraform init -input=false
+
+    - name: Terraform Plan
+      working-directory: terraform
+      run: terraform plan
+
+    - name: Terraform Apply Infrastructure
+      if: github.ref == 'refs/heads/test'
+      working-directory: terraform
+      run: terraform apply -auto-approve
+
+    - name: Login to private Amazon ECR
+      run: |
+        aws ecr get-login-password --region us-east-1 | \
+        docker login --username AWS \
+        --password-stdin 929897439921.dkr.ecr.us-east-1.amazonaws.com  
+
+    - name: Build, tag, and push Docker image to ECR
+      env:
+        ECR_REGISTRY: 929897439921.dkr.ecr.us-east-1.amazonaws.com
+        ECR_REPOSITORY: zomato-clone
+        IMAGE_TAG: latest
+      run: |
+        cd app_code
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    - name: Update kubeconfig for EKS
+      run: |
+        aws eks update-kubeconfig --name zomato-cluster --region us-east-1
+
+    - name: Deploy Monitoring Stack
+      run: |
+        cd terraform
+        terraform apply -auto-approve -target=aws_iam_role.cloudwatch_agent_role
+        terraform apply -auto-approve -target=aws_cloudwatch_log_group.application_logs
+        terraform apply -auto-approve -target=aws_cloudwatch_log_group.system_logs
+        terraform apply -auto-approve -target=aws_cloudwatch_log_group.error_logs
+
+    - name: Deploy Prometheus Stack
+      run: |
+        cd terraform
+        terraform apply -auto-approve -target=helm_release.prometheus
+
+    - name: Deploy CloudWatch Agent
+      run: |
+        cd terraform
+        terraform apply -auto-approve -target=helm_release.cloudwatch_agent
+
+    - name: Deploy Application with Monitoring
+      run: |
+        cd terraform
+        terraform apply -auto-approve -target=helm_release.zomato_clone
+
+    - name: Verify Monitoring Stack
+      run: |
+        kubectl get pods -n monitoring
+        kubectl get pods -n amazon-cloudwatch
+        kubectl get svc -n monitoring
+
+    - name: Get Monitoring URLs
+      run: |
+        echo "Monitoring Stack Deployed Successfully!"
+        echo "Grafana: kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+        echo "Prometheus: kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090"
+        echo "Default Grafana credentials: admin/admin123"
+
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x /tmp/argocd
+        sudo mv /tmp/argocd /usr/local/bin/argocd
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ secrets.ARGOCD_SERVER_IP }} \
+          --username ${{ secrets.ARGOCD_USERNAME }} \
+          --password ${{ secrets.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Register EKS cluster with ArgoCD
+      run: |
+        argocd cluster add $(kubectl config current-context) --insecure
+
+    - name: Add GitHub repo to ArgoCD
+      run: |
+        argocd repo add https://github.com/${{ github.repository }}.git \
+          --username ${{ secrets.GIT_USERNAME }} \
+          --password ${{ secrets.GIT_PAT }} \
+          --insecure
+
+    - name: Create ArgoCD Application
+      run: |
+        EKS_API=$(kubectl config view -o jsonpath='{.clusters[?(@.name=="'$(kubectl config current-context)'")].cluster.server}')
+        
+        argocd app create zomato-clone \
+          --repo https://github.com/${{ github.repository }}.git \
+          --revision test \
+          --path helm/zomato-clone \
+          --dest-server $EKS_API \
+          --dest-namespace default \
+          --sync-policy automated \
+          --insecure || echo "App already exists, continuing..."
+
+    - name: Optionally trigger ArgoCD sync
+      run: |
+        argocd app sync zomato-clone --insecure

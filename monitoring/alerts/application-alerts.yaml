@@ -1,0 +1,101 @@
+# Application Alerting Rules
+# These rules define when alerts should be triggered
+
+groups:
+  - name: zomato-application
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: zomato-clone
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second for the last 5 minutes"
+          runbook_url: "https://github.com/your-repo/runbooks#high-error-rate"
+
+      # High Response Time Alert
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: zomato-clone
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }} seconds"
+          runbook_url: "https://github.com/your-repo/runbooks#high-response-time"
+
+      # Service Down Alert
+      - alert: ServiceDown
+        expr: up{job="zomato-clone"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: zomato-clone
+        annotations:
+          summary: "Service is down"
+          description: "Zomato clone service has been down for more than 1 minute"
+          runbook_url: "https://github.com/your-repo/runbooks#service-down"
+
+      # High CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: zomato-clone
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+          runbook_url: "https://github.com/your-repo/runbooks#high-cpu-usage"
+
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: zomato-clone
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+          runbook_url: "https://github.com/your-repo/runbooks#high-memory-usage"
+
+      # Disk Space Alert
+      - alert: DiskSpaceFilling
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: zomato-clone
+        annotations:
+          summary: "Disk space filling up"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }}"
+          runbook_url: "https://github.com/your-repo/runbooks#disk-space"
+
+      # Pod Restart Alert
+      - alert: PodRestarting
+        expr: increase(kube_pod_container_status_restarts_total{namespace="default"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: zomato-clone
+        annotations:
+          summary: "Pod is restarting"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+          runbook_url: "https://github.com/your-repo/runbooks#pod-restarting"
+
+      # Deployment Not Ready Alert
+      - alert: DeploymentNotReady
+        expr: kube_deployment_status_replicas_available{namespace="default"} < kube_deployment_spec_replicas{namespace="default"}
+        for: 5m
+        labels:
+          severity: critical
+          service: zomato-clone
+        annotations:
+          summary: "Deployment not ready"
+          description: "Deployment {{ $labels.deployment }} has {{ $value }} available replicas"
+          runbook_url: "https://github.com/your-repo/runbooks#deployment-not-ready"

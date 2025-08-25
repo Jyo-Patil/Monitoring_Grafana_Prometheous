@@ -1,0 +1,143 @@
+# Prometheus Stack Values
+# This file configures the kube-prometheus-stack
+
+grafana:
+  enabled: true
+  adminPassword: "admin123"
+  
+  # Persistence
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: gp2
+  
+  # Dashboard provisioning
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  
+  # Dashboards
+  dashboards:
+    default:
+      zomato-application:
+        json: |
+          {
+            "dashboard": {
+              "title": "Zomato Clone Application Dashboard",
+              "panels": [
+                {
+                  "title": "HTTP Request Rate",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "rate(http_requests_total[5m])",
+                      "legendFormat": "{{method}} {{route}}"
+                    }
+                  ]
+                },
+                {
+                  "title": "Response Time",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+                      "legendFormat": "95th percentile"
+                    }
+                  ]
+                },
+                {
+                  "title": "Error Rate",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "rate(http_requests_total{status_code=~\"5..\"}[5m])",
+                      "legendFormat": "5xx errors"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+  
+  # Service configuration
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 3000
+  
+  # Ingress (optional)
+  ingress:
+    enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    
+    # Service monitors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    
+    # Pod monitors
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    
+    # Alerting rules
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['alertname']
+        group_wait: 10s
+        group_interval: 10s
+        repeat_interval: 1h
+        receiver: 'web.hook'
+      receivers:
+        - name: 'web.hook'
+          webhook_configs:
+            - url: 'http://127.0.0.1:5001/'
+
+# Additional components
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+# RBAC
+rbac:
+  create: true
+
+# Security
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534

@@ -1,0 +1,4 @@
+apiVersion: v2
+name: zomato-clone
+version: 0.1.0
+icon: https://example.com/icon.png

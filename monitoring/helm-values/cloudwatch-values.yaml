@@ -1,0 +1,91 @@
+# CloudWatch Agent Values
+# This file configures the AWS CloudWatch agent
+
+clusterName: "zomato-cluster"
+region: "us-east-1"
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::929897439921:role/CloudWatchAgentRole"
+  name: "cloudwatch-agent"
+
+# CloudWatch agent configuration
+config:
+  logs:
+    logs_collected:
+      files:
+        collect_list:
+          # Application logs
+          - file_path: /var/log/containers/*.log
+            log_group_name: "/aws/eks/zomato-cluster/application"
+            log_stream_name: "{container_name}"
+            time_format: "%Y-%m-%dT%H:%M:%S.%L"
+            multi_line_start_pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}"
+            timestamp_format: "%Y-%m-%dT%H:%M:%S.%L"
+            encoding: utf-8
+            retention_in_days: 30
+            
+          # System logs
+          - file_path: /var/log/containers/*.log
+            log_group_name: "/aws/eks/zomato-cluster/system"
+            log_stream_name: "{container_name}"
+            time_format: "%Y-%m-%dT%H:%M:%S.%L"
+            multi_line_start_pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}"
+            timestamp_format: "%Y-%m-%dT%H:%M:%S.%L"
+            encoding: utf-8
+            retention_in_days: 30
+            
+          # Error logs
+          - file_path: /var/log/containers/*.log
+            log_group_name: "/aws/eks/zomato-cluster/errors"
+            log_stream_name: "{container_name}"
+            time_format: "%Y-%m-%dT%H:%M:%S.%L"
+            multi_line_start_pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}"
+            timestamp_format: "%Y-%m-%dT%H:%M:%S.%L"
+            encoding: utf-8
+            retention_in_days: 30
+
+  metrics:
+    metrics_collected:
+      kubernetes:
+        cluster_name: "zomato-cluster"
+        metrics_collection_interval: 60
+        disable_metric: false
+        enable_detailed_monitoring: true
+        
+      # Node metrics
+      node:
+        metrics_collection_interval: 60
+        resources:
+          - cpu
+          - memory
+          - disk
+          - network
+          
+      # Container metrics
+      container:
+        metrics_collection_interval: 60
+        resources:
+          - cpu
+          - memory
+          - disk
+          - network
+
+# Resource limits
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Node selector (optional)
+nodeSelector: {}
+
+# Tolerations (optional)
+tolerations: []
+
+# Affinity (optional)
+affinity: {}

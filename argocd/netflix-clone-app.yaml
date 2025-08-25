@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zomato-clone
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<your-username>/<your-repo-name>.git
+    targetRevision: main
+    path: helm/zomato-clone  # path to the Helm chart in your repo
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
