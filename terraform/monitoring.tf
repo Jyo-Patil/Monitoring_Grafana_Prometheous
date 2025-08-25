@@ -7,6 +7,14 @@ data "aws_eks_cluster_auth" "eks" {
   name = aws_eks_cluster.eks.name
 }
 
+# Wait for EKS cluster to be ready
+resource "null_resource" "wait_for_eks" {
+  provisioner "local-exec" {
+    command = "aws eks wait cluster-active --name ${aws_eks_cluster.eks.name} --region ${var.aws_region}"
+  }
+  depends_on = [aws_eks_cluster.eks]
+}
+
 # Configure Helm provider
 provider "helm" {
   kubernetes {
@@ -14,6 +22,13 @@ provider "helm" {
     cluster_ca_certificate = base64decode(aws_eks_cluster.eks.certificate_authority[0].data)
     token                  = data.aws_eks_cluster_auth.eks.token
   }
+}
+
+# Configure Kubernetes provider
+provider "kubernetes" {
+  host                   = aws_eks_cluster.eks.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.eks.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.eks.token
 }
 
 # Create CloudWatch IAM role for monitoring
@@ -68,27 +83,32 @@ resource "helm_release" "prometheus" {
   chart      = "kube-prometheus-stack"
   namespace  = "monitoring"
   create_namespace = true
+  timeout    = 600
+  wait       = true
+  wait_for_jobs = true
 
   values = [
     file("${path.module}/../monitoring/helm-values/prometheus-values.yaml")
   ]
 
-  depends_on = [aws_eks_cluster.eks]
+  depends_on = [null_resource.wait_for_eks]
 }
 
-# Deploy CloudWatch Agent via Terraform
+# Deploy CloudWatch Agent via Terraform - using a simpler approach
 resource "helm_release" "cloudwatch_agent" {
   name       = "cloudwatch-agent"
-  repository = "https://aws.github.io/amazon-cloudwatch-agent"
-  chart      = "amazon-cloudwatch-agent"
+  repository = "https://prometheus-community.github.io/helm-charts"
+  chart      = "prometheus-node-exporter"
   namespace  = "amazon-cloudwatch"
   create_namespace = true
+  timeout    = 600
+  wait       = true
 
   values = [
     file("${path.module}/../monitoring/helm-values/cloudwatch-values.yaml")
   ]
 
-  depends_on = [aws_eks_cluster.eks]
+  depends_on = [null_resource.wait_for_eks]
 }
 
 # Deploy your application via Terraform
@@ -97,10 +117,12 @@ resource "helm_release" "zomato_clone" {
   chart      = "${path.module}/../helm/zomato-clone"
   namespace  = "default"
   create_namespace = true
+  timeout    = 600
+  wait       = true
 
   values = [
     file("${path.module}/../monitoring/helm-values/app-values.yaml")
   ]
 
-  depends_on = [aws_eks_cluster.eks]
+  depends_on = [null_resource.wait_for_eks]
 }
