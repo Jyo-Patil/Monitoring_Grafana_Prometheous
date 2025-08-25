@@ -1,18 +1,24 @@
 # Monitoring Infrastructure using Terraform + Helm Provider
 # This implements Option 2: Best of both worlds approach
 
+# Data sources
+data "aws_caller_identity" "current" {}
+data "aws_eks_cluster_auth" "eks" {
+  name = aws_eks_cluster.eks.name
+}
+
 # Configure Helm provider
 provider "helm" {
   kubernetes {
-    host                   = aws_eks_cluster.cluster.endpoint
-    cluster_ca_certificate = base64decode(aws_eks_cluster.cluster.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.cluster.token
+    host                   = aws_eks_cluster.eks.endpoint
+    cluster_ca_certificate = base64decode(aws_eks_cluster.eks.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.eks.token
   }
 }
 
 # Create CloudWatch IAM role for monitoring
 resource "aws_iam_role" "cloudwatch_agent_role" {
-  name = "CloudWatchAgentRole-${aws_eks_cluster.cluster.name}"
+  name = "CloudWatchAgentRole-${aws_eks_cluster.eks.name}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -21,11 +27,11 @@ resource "aws_iam_role" "cloudwatch_agent_role" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Effect = "Allow"
         Principal = {
-          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(aws_eks_cluster.cluster.identity[0].oidc[0].issuer, "https://", "")}"
+          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}"
         }
         Condition = {
           StringEquals = {
-            "${replace(aws_eks_cluster.cluster.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
+            "${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
           }
         }
       }
@@ -41,17 +47,17 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent_policy" {
 
 # Create CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "application_logs" {
-  name              = "/aws/eks/${aws_eks_cluster.cluster.name}/application"
+  name              = "/aws/eks/${aws_eks_cluster.eks.name}/application"
   retention_in_days = 30
 }
 
 resource "aws_cloudwatch_log_group" "system_logs" {
-  name              = "/aws/eks/${aws_eks_cluster.cluster.name}/system"
+  name              = "/aws/eks/${aws_eks_cluster.eks.name}/system"
   retention_in_days = 30
 }
 
 resource "aws_cloudwatch_log_group" "error_logs" {
-  name              = "/aws/eks/${aws_eks_cluster.cluster.name}/errors"
+  name              = "/aws/eks/${aws_eks_cluster.eks.name}/errors"
   retention_in_days = 30
 }
 
@@ -67,7 +73,7 @@ resource "helm_release" "prometheus" {
     file("${path.module}/../monitoring/helm-values/prometheus-values.yaml")
   ]
 
-  depends_on = [aws_eks_cluster.cluster]
+  depends_on = [aws_eks_cluster.eks]
 }
 
 # Deploy CloudWatch Agent via Terraform
@@ -82,7 +88,7 @@ resource "helm_release" "cloudwatch_agent" {
     file("${path.module}/../monitoring/helm-values/cloudwatch-values.yaml")
   ]
 
-  depends_on = [aws_eks_cluster.cluster]
+  depends_on = [aws_eks_cluster.eks]
 }
 
 # Deploy your application via Terraform
@@ -96,5 +102,5 @@ resource "helm_release" "zomato_clone" {
     file("${path.module}/../monitoring/helm-values/app-values.yaml")
   ]
 
-  depends_on = [aws_eks_cluster.cluster]
+  depends_on = [aws_eks_cluster.eks]
 }
