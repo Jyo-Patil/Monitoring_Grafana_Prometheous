@@ -104,6 +104,66 @@ jobs:
         echo "📈 Prometheus is accessible at:"
         echo "👉 http://$PUBLIC_IP:$PROM_PORT"
 
+    - name: Deploy Grafana Dashboard
+      run: |
+        echo "🚀 Deploying Grafana with Prometheus datasource..."
+
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo update
+
+        kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+        cat <<EOF > grafana-values.yaml
+        adminUser: admin
+        adminPassword: admin123
+        service:
+          type: NodePort
+          nodePort: 32000
+
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              - name: Prometheus
+                type: prometheus
+                url: http://prometheus-server.monitoring.svc.cluster.local
+                access: proxy
+                isDefault: true
+
+        dashboardProviders:
+          dashboardproviders.yaml:
+            apiVersion: 1
+            providers:
+              - name: 'default'
+                orgId: 1
+                folder: ''
+                type: file
+                disableDeletion: false
+                editable: true
+                options:
+                  path: /var/lib/grafana/dashboards/default
+
+        dashboards:
+          default:
+            node-exporter-full:
+              gnetId: 1860
+              revision: 27
+              datasource: Prometheus
+            kubernetes-cluster:
+              gnetId: 315
+              revision: 3
+              datasource: Prometheus
+        EOF
+
+        helm upgrade --install grafana grafana/grafana \
+          --namespace monitoring \
+          -f grafana-values.yaml
+
+    - name: Get Grafana Access URL
+      run: |
+        PUBLIC_IP=$(curl -s ifconfig.me)
+        echo "🌐 Grafana Dashboard URL: http://$PUBLIC_IP:32000"
+        echo "🔑 Credentials: admin / admin123"
 
     # - name: Verify Monitoring Stack
     #   run: |
