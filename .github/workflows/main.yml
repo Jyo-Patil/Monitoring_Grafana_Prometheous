@@ -113,10 +113,7 @@ jobs:
 
     - name: Add GitHub repo to ArgoCD
       run: |
-        argocd repo add https://github.com/${{ github.repository }}.git \
-          --username ${{ secrets.GIT_USERNAME }} \
-          --password ${{ secrets.GIT_PAT }} \
-          --insecure
+        argocd repo add https://github.com/Jyo-Patil/Monitoring_Grafana_Prometheous.git --insecure-skip-server-verification
 
     - name: Create ArgoCD Application
       run: |
