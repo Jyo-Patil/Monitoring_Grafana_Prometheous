@@ -79,7 +79,7 @@ jobs:
     - name: Deploy Application with Monitoring
       run: |
         cd terraform
-        terraform apply -auto-approve -target=helm_release.zomato_clone
+        terraform apply -auto-approve -target=helm_release.zomato_clone 
 
     - name: Verify Monitoring Stack
       run: |
@@ -88,23 +88,26 @@ jobs:
         kubectl get pods -n amazon-cloudwatch
         kubectl get svc -n monitoring
 
-    - name: Get Monitoring URLs
+    - name: Get Prometheus URL
       run: |
         echo "✅ Monitoring Stack Deployed Successfully!"
 
-        # Get EC2 public IP or node external IP
+        # Expose Prometheus service externally if it's still ClusterIP
+        kubectl patch svc prometheus-server -n monitoring -p '{"spec": {"type": "NodePort"}}' || true
+
+        # Get EC2 public IP
         PUBLIC_IP=$(curl -s ifconfig.me)
-        
-        # Get NodePorts dynamically
-        GRAFANA_PORT=$(kubectl get svc prometheus-grafana -n monitoring -o jsonpath='{.spec.ports[0].nodePort}')
+
+        # Get NodePort dynamically
         PROM_PORT=$(kubectl get svc prometheus-server -n monitoring -o jsonpath='{.spec.ports[0].nodePort}')
 
-        echo "🌐 Grafana URL:     http://$PUBLIC_IP:$GRAFANA_PORT"
-        echo "📈 Prometheus URL:  http://$PUBLIC_IP:$PROM_PORT"
-        echo "🔑 Default Grafana credentials: admin / admin123"    
+        echo "📈 Prometheus is accessible at:"
+        echo "👉 http://$PUBLIC_IP:$PROM_PORT"
+
 
     # - name: Verify Monitoring Stack
     #   run: |
+        
     #     kubectl get pods -n monitoring
     #     kubectl get pods -n amazon-cloudwatch
     #     kubectl get svc -n monitoring
@@ -116,40 +119,40 @@ jobs:
     #     echo "Prometheus: kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090"
     #     echo "Default Grafana credentials: admin/admin123"
 
-    # - name: Install ArgoCD CLI
-    #   run: |
-    #     curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-    #     chmod +x /tmp/argocd
-    #     sudo mv /tmp/argocd /usr/local/bin/argocd
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x /tmp/argocd
+        sudo mv /tmp/argocd /usr/local/bin/argocd
 
-    # - name: Login to ArgoCD
-    #   run: |
-    #     argocd login ${{ secrets.ARGOCD_SERVER_IP }} \
-    #       --username ${{ secrets.ARGOCD_USERNAME }} \
-    #       --password ${{ secrets.ARGOCD_PASSWORD }} \
-    #       --insecure
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ secrets.ARGOCD_SERVER_IP }} \
+          --username ${{ secrets.ARGOCD_USERNAME }} \
+          --password ${{ secrets.ARGOCD_PASSWORD }} \
+          --insecure
 
-    # - name: Register EKS cluster with ArgoCD
-    #   run: |
-    #     argocd cluster add $(kubectl config current-context) --insecure
+    - name: Register EKS cluster with ArgoCD
+      run: |
+        argocd cluster add $(kubectl config current-context) --insecure
 
-    # - name: Add GitHub repo to ArgoCD
-    #   run: |
-    #     argocd repo add https://github.com/Jyo-Patil/Monitoring_Grafana_Prometheous.git --insecure-skip-server-verification
+    - name: Add GitHub repo to ArgoCD
+      run: |
+        argocd repo add https://github.com/Jyo-Patil/Monitoring_Grafana_Prometheous.git --insecure-skip-server-verification
 
-    # - name: Create ArgoCD Application
-    #   run: |
-    #     EKS_API=$(kubectl config view -o jsonpath='{.clusters[?(@.name=="'$(kubectl config current-context)'")].cluster.server}')
+    - name: Create ArgoCD Application
+      run: |
+        EKS_API=$(kubectl config view -o jsonpath='{.clusters[?(@.name=="'$(kubectl config current-context)'")].cluster.server}')
         
-    #     argocd app create zomato-clone \
-    #       --repo https://github.com/${{ github.repository }}.git \
-    #       --revision main \
-    #       --path helm/zomato-clone \
-    #       --dest-server $EKS_API \
-    #       --dest-namespace default \
-    #       --sync-policy automated \
-    #       --insecure || echo "App already exists, continuing..."
+        argocd app create zomato-clone \
+          --repo https://github.com/${{ github.repository }}.git \
+          --revision main \
+          --path helm/zomato-clone \
+          --dest-server $EKS_API \
+          --dest-namespace default \
+          --sync-policy automated \
+          --insecure || echo "App already exists, continuing..."
 
-    # - name: Optionally trigger ArgoCD sync
-    #   run: |
-    #     argocd app sync zomato-clone --insecure
+    - name: Optionally trigger ArgoCD sync
+      run: |
+        argocd app sync zomato-clone --insecure
