@@ -156,3 +156,23 @@ jobs:
     - name: Optionally trigger ArgoCD sync
       run: |
         argocd app sync zomato-clone --insecure
+
+    - name: Get Application Access URL
+      run: |
+        echo "🌐 Fetching Zomato Clone Application Access Details..."
+
+        # Get EC2 public IP (of the worker node or bastion host)
+        PUBLIC_IP=$(curl -s ifconfig.me)
+
+        # Get the service name (if it's different, adjust the selector)
+        APP_SVC="zomato-clone"
+
+        # Expose the service externally if needed
+        kubectl patch svc $APP_SVC -n default -p '{"spec": {"type": "NodePort"}}' || true
+
+        # Get the NodePort dynamically
+        APP_PORT=$(kubectl get svc $APP_SVC -n default -o jsonpath='{.spec.ports[0].nodePort}')
+
+        echo "✅ Application deployed successfully!"
+        echo "🌍 Access your app at:"
+        echo "👉 http://$PUBLIC_IP:$APP_PORT"
