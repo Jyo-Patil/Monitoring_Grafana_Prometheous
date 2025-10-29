@@ -121,7 +121,7 @@ jobs:
         
         argocd app create zomato-clone \
           --repo https://github.com/${{ github.repository }}.git \
-          --revision test \
+          --revision main \
           --path helm/zomato-clone \
           --dest-server $EKS_API \
           --dest-namespace default \
